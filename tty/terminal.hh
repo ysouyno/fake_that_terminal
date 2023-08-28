@@ -3,6 +3,7 @@
 
 #include "screen.hh"
 #include <deque>
+#include <string>
 
 class termwindow {
 public:
