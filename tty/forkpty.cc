@@ -6,8 +6,8 @@
 
 void ForkPTY::Open(std::size_t w, std::size_t h) {
   struct winsize ws = {};
-  ws.ws_row = w;
-  ws.ws_col = h;
+  ws.ws_col = w;
+  ws.ws_row = h;
   pid = forkpty(&fd, NULL, NULL, &ws);
   if (!pid) {
     static char termstr[] = "TERM=linux";
