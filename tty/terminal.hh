@@ -32,9 +32,17 @@ private:
   inline void csi_J(unsigned c) const;
   void csi_K(unsigned c) const;
 
-  void csi_L(int c) const { yscroll_down(cy, bottom, c); }
+  void csi_L(int c) const {
+    if (c == 0)
+      c = 1;
+    yscroll_down(cy, bottom, c);
+  }
 
-  inline void csi_M(int c) const { yscroll_up(cy, bottom, c); }
+  inline void csi_M(int c) const {
+    if (c == 0)
+      c = 1;
+    yscroll_up(cy, bottom, c);
+  }
 
   inline void csi_P(unsigned c) const;
   inline void csi_X(unsigned c) const;
