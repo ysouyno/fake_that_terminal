@@ -400,3 +400,4 @@ FodyWeavers.xsd
 # Added by ysouyno
 *.out
 *.o
+*.d

@@ -10,12 +10,16 @@ CXXFLAGS += $(shell pkg-config sdl2 --cflags)
 LDLIBS   += $(shell pkg-config sdl2 --libs)
 LDLIBS   += -lutil # for forkpty
 
+CPPFLAGS += -MP -MMD -MF$(subst .o,.d,$(addprefix .deps/,$@))
+
 OBJS = \
 	rendering/screen.o \
 	tty/terminal.o \
 	tty/forkpty.o \
 	ctype.o \
 	main.o
+
+-include $(addprefix .deps/,$(OBJS:.o:.d))
 
 TARGET = main.out
 
