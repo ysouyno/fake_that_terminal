@@ -1,7 +1,9 @@
 #include "forkpty.hh"
+#include <asm-generic/ioctls.h>
 #include <cstdlib>
 #include <fcntl.h>
 #include <pty.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 
 void ForkPTY::Open(std::size_t w, std::size_t h) {
@@ -30,4 +32,13 @@ std::pair<std::string, int> ForkPTY::Recv() {
     result.first.assign(buffer, buffer + result.second);
 
   return result;
+}
+
+void ForkPTY::Kill(int signal) { kill(pid, signal); }
+
+void ForkPTY::Resize(unsigned xsize, unsigned ysize) {
+  struct winsize ws = {};
+  ws.ws_col = xsize;
+  ws.ws_row = ysize;
+  ioctl(fd, TIOCSWINSZ, &ws);
 }

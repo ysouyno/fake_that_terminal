@@ -1,6 +1,7 @@
 #ifndef SCREEN_H
 #define SCREEN_H
 
+#include <bits/c++config.h>
 #include <cstdint>
 #include <cstdio>
 #include <tuple>
@@ -89,6 +90,7 @@ public:
   }
 
   void Render(std::size_t fx, std::size_t fy, std::uint32_t *pixels);
+  void Resize(std::size_t newsx, std::size_t newsy);
 };
 
 #endif /* SCREEN_H */
