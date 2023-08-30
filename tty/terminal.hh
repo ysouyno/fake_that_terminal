@@ -59,7 +59,7 @@ private:
   Window &wnd;
 
   int top, bottom;
-  signed char intensity, underline, blink, reverse;
+  signed char intensity, italic, underline, blink, reverse, bold;
   unsigned fgc, bgc;
   char g0set, g1set, activeset, utfmode, translate;
   unsigned utflength;
@@ -84,7 +84,7 @@ private:
   int ques;
 
   struct backup {
-    int cx, cy, i, u, b, r, f, g, top, bottom;
+    int cx, cy, i, I, u, b, r, B, f, g, top, bottom;
   } backup;
 };
 
