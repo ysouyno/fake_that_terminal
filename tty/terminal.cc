@@ -33,7 +33,7 @@ static struct xterm256init {
 } xterm256initializer;
 
 static unsigned Translate16Color(unsigned c) {
-  fprintf(stderr, "16-color for %u is 0x%06X\n", xterm256table[c]);
+  fprintf(stderr, "16-color for %u is 0x%06X\n", c, xterm256table[c]);
   return xterm256table[c];
 }
 
