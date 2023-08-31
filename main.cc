@@ -5,6 +5,7 @@
 #include <SDL.h>
 #include <cstdint>
 #include <cstdio>
+#include <glog/logging.h>
 #include <poll.h>
 #include <sys/poll.h>
 #include <unistd.h>
@@ -122,6 +123,11 @@ void SDL_ReDraw(Window &wnd) {
 } // namespace
 
 int main() {
+  google::InitGoogleLogging("fake_that_terminal");
+  google::SetLogFilenameExtension(".log");
+  FLAGS_logtostderr = true;
+  FLAGS_colorlogtostderr = true;
+
   Window wnd(WindowWidth, WindowHeight);
   termwindow term(wnd);
   ForkPTY tty(wnd.xsize, wnd.ysize);

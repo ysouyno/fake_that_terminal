@@ -9,6 +9,7 @@ CXXFLAGS += -fopenmp
 CXXFLAGS += $(shell pkg-config sdl2 --cflags)
 LDLIBS   += $(shell pkg-config sdl2 --libs)
 LDLIBS   += -lutil # for forkpty
+LDLIBS   += -lglog # for glog
 
 CPPFLAGS += -MP -MMD -MF$(subst .o,.d,$(addprefix .deps/,$@))
 

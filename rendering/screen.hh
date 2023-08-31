@@ -4,6 +4,7 @@
 #include <bits/c++config.h>
 #include <cstdint>
 #include <cstdio>
+#include <glog/logging.h>
 #include <tuple>
 #include <vector>
 
@@ -84,7 +85,9 @@ public:
     Cell ch = blank;
     ch.ch = c;
     if (c != U' ') {
-      fprintf(stderr, "Ch at (%zu, %zu): <%c>\n", x, y, int(c));
+      // fprintf(stderr, "Ch at (%zu, %zu): <%c>\n", x, y, int(c));
+      VLOG(64) << "Ch at (" << x << ", " << y << ")"
+               << ": <" << char(c) << ">";
     }
 
     PutCh(x, y, ch);
