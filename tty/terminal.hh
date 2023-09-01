@@ -32,22 +32,16 @@ private:
   inline void csi_J(unsigned c) const;
   void csi_K(unsigned c) const;
 
-  void csi_L(int c) const {
-    if (c == 0)
-      c = 1;
-    yscroll_down(cy, bottom, c);
-  }
+  void csi_L(int c) const { yscroll_down(cy, bottom, c); }
 
-  inline void csi_M(int c) const {
-    if (c == 0)
-      c = 1;
-    yscroll_up(cy, bottom, c);
-  }
+  inline void csi_M(int c) const { yscroll_up(cy, bottom, c); }
 
   inline void csi_P(unsigned c) const;
   inline void csi_X(unsigned c) const;
   void csi_at(unsigned c) const;
 
+  void ResetFG();
+  void ResetBG();
   void ResetAttr();
   void BuildAttr();
 
@@ -59,7 +53,8 @@ private:
   Window &wnd;
 
   int top, bottom;
-  signed char intensity, italic, underline, blink, reverse, bold, overstrike;
+  signed char intensity, underline;
+  bool italic, blink, reverse, bold, overstrike;
   unsigned fgc, bgc;
   char g0set, g1set, activeset, utfmode, translate;
   unsigned utflength;
@@ -81,10 +76,12 @@ private:
   } state;
 
   std::vector<int> par;
-  int ques;
+  char extramark;
 
   struct backup {
-    int cx, cy, i, I, u, b, r, B, o, f, g, top, bottom;
+    signed char cx, cy, i, u;
+    int top, bottom, f, g;
+    bool I, b, r, B, o;
   } backup;
 };
 
