@@ -9,10 +9,12 @@
    ((((unsigned(r)) & 0x1F) * 255 / 31) << 16))
 
 static unsigned xterm256table[256] = {
-    Make16(0, 0, 0),  Make16(21, 0, 0),  Make16(0, 21, 0),  Make16(21, 5, 0),
-    Make16(0, 0, 21), Make16(21, 0, 21), Make16(0, 21, 21), Make16(21, 21, 21),
-    Make16(7, 7, 7),  Make16(31, 5, 5),  Make16(5, 31, 5),  Make16(31, 31, 5),
-    Make16(5, 5, 31), Make16(31, 5, 31), Make16(5, 31, 31), Make16(31, 31, 31)};
+    Make16(0, 0, 0),    Make16(21, 0, 0),   Make16(0, 21, 0),
+    Make16(21, 10, 0),  Make16(0, 0, 21),   Make16(21, 0, 21),
+    Make16(0, 21, 21),  Make16(21, 21, 21), Make16(15, 15, 15),
+    Make16(31, 10, 10), Make16(5, 31, 10),  Make16(31, 31, 10),
+    Make16(10, 10, 31), Make16(31, 10, 31), Make16(5, 31, 31),
+    Make16(31, 31, 31)};
 
 static struct xterm256init {
   xterm256init() {
@@ -65,6 +67,7 @@ void termwindow::save_cur() {
   backup.b = blink;
   backup.r = reverse;
   backup.B = bold;
+  backup.o = overstrike;
   backup.f = fgc;
   backup.g = bgc;
   backup.top = top;
@@ -80,6 +83,7 @@ void termwindow::restore_cur() {
   blink = backup.b;
   reverse = backup.r;
   bold = backup.B;
+  overstrike = backup.o;
   fgc = backup.f;
   bgc = backup.g;
   top = backup.top;
@@ -529,6 +533,9 @@ void termwindow::Write(std::u32string_view s) {
           case 7:
             reverse = 1;
             break;
+          case 9:
+            overstrike = 1;
+            break;
           case 21:
             underline = 2;
             break;
@@ -547,6 +554,9 @@ void termwindow::Write(std::u32string_view s) {
             break;
           case 27:
             reverse = 0;
+            break;
+          case 29:
+            overstrike = 0;
             break;
           case 38:
             mode256 = 1;
