@@ -205,51 +205,48 @@ int main() {
           bool alt = keys[SDLK_LALT] || keys[SDLK_RALT];
           bool ctrl = keys[SDLK_LCTRL] || keys[SDLK_RCTRL];
 
-          // F1 decrease rows
-          // F2 increase rows
-          // F3 decrease cols
-          // F4 increase cols
-
           bool processed = false;
           bool resized = false;
 
-          switch (ev.key.keysym.sym) {
-          case SDLK_F1:
-            wnd.Resize(wnd.xsize, wnd.ysize - 1);
-            resized = true;
-            break;
-          case SDLK_F2:
-            wnd.Resize(wnd.xsize, wnd.ysize + 1);
-            resized = true;
-            break;
-          case SDLK_F3:
-            wnd.Resize(wnd.xsize - 1, wnd.ysize);
-            resized = true;
-            break;
-          case SDLK_F4:
-            wnd.Resize(wnd.xsize + 1, wnd.ysize);
-            resized = true;
-            break;
-          case SDLK_F5:
-            if (VidCellHeight > 6)
-              --VidCellHeight;
-            resized = true;
-            break;
-          case SDLK_F6:
-            if (VidCellHeight < 32)
-              ++VidCellHeight;
-            resized = true;
-            break;
-          case SDLK_F7:
-            if (VidCellWidth > 8)
-              VidCellWidth /= 2;
-            resized = true;
-            break;
-          case SDLK_F8:
-            if (VidCellWidth <= 8)
-              VidCellWidth *= 2;
-            resized = true;
-            break;
+          if (!shift && !alt && !ctrl) {
+            switch (ev.key.keysym.sym) {
+            case SDLK_F1:
+              wnd.Resize(wnd.xsize, wnd.ysize - 1);
+              resized = true;
+              break;
+            case SDLK_F2:
+              wnd.Resize(wnd.xsize, wnd.ysize + 1);
+              resized = true;
+              break;
+            case SDLK_F3:
+              wnd.Resize(wnd.xsize - 1, wnd.ysize);
+              resized = true;
+              break;
+            case SDLK_F4:
+              wnd.Resize(wnd.xsize + 1, wnd.ysize);
+              resized = true;
+              break;
+            case SDLK_F5:
+              if (VidCellHeight > 6)
+                --VidCellHeight;
+              resized = true;
+              break;
+            case SDLK_F6:
+              if (VidCellHeight < 32)
+                ++VidCellHeight;
+              resized = true;
+              break;
+            case SDLK_F7:
+              if (VidCellWidth > 8)
+                VidCellWidth /= 2;
+              resized = true;
+              break;
+            case SDLK_F8:
+              if (VidCellWidth <= 8)
+                VidCellWidth *= 2;
+              resized = true;
+              break;
+            }
           }
 
           if (resized) {
