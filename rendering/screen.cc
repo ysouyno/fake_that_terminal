@@ -83,7 +83,7 @@ static unsigned Mix(unsigned color1, unsigned color2, unsigned fac1,
 }
 
 static constexpr std::array<unsigned char, 16>
-CalculateIntensityTable(bool dim, bool bold, bool intense, float italic) {
+CalculateIntensityTable(bool dim, bool bold, float italic) {
   std::array<unsigned char, 16> result = {};
 
   auto calc = [=](bool prev, bool cur, bool next) constexpr {
@@ -102,9 +102,6 @@ CalculateIntensityTable(bool dim, bool bold, bool intense, float italic) {
         // add dim extra pixel, slightly brighten existing pixels
         result += float(1.f / 4.f);
     }
-
-    if (intense)
-      result *= float(3.f / 2.f); // brighten all pixels
 
     return result;
   };
@@ -131,7 +128,7 @@ void Window::Render(std::size_t fx, std::size_t fy, std::uint32_t *pixels) {
   std::size_t font_row_size_in_bytes = (fx + 7) / 8;
 
   static constexpr std::array<unsigned char, 16> taketables[] = {
-#define i(n, i) CalculateIntensityTable(n & 4, n & 2, n & 1, i),
+#define i(n, i) CalculateIntensityTable(n & 2, n & 1, i),
 #define j(n)                                                                   \
   i(n, 0 / 8.f) i(n, 1 / 8.f) i(n, 2 / 8.f) i(n, 3 / 8.f) i(n, 4 / 8.f)        \
       i(n, 5 / 8.f) i(n, 6 / 8.f) i(n, 7 / 8.f)
@@ -139,21 +136,6 @@ void Window::Render(std::size_t fx, std::size_t fy, std::uint32_t *pixels) {
 #undef j
 #undef i
   };
-
-  // static const unsigned char taketables[12][16] = {
-  //     {0, 0, 0, 0, 3, 3, 3, 3, 0, 0, 0, 0, 3, 3, 3, 3}, /*mode 0*/
-  //     {0, 0, 0, 0, 1, 1, 3, 3, 0, 0, 0, 0, 1, 1, 3, 3}, /*mode 1*/
-  //     {0, 0, 0, 0, 3, 3, 3, 3, 1, 1, 1, 1, 3, 3, 3, 3}, /*mode 2*/
-  //     {0, 0, 0, 0, 1, 1, 3, 3, 1, 1, 1, 1, 1, 1, 3, 3}, /*mode 3*/
-  //     {0, 0, 1, 1, 2, 2, 3, 3, 0, 0, 1, 1, 2, 2, 3, 3}, /*mode 4*/
-  //     {0, 0, 0, 1, 1, 1, 2, 3, 0, 0, 0, 1, 1, 1, 2, 3}, /*mode 5*/
-  //     {0, 0, 1, 1, 2, 2, 3, 3, 1, 1, 2, 2, 2, 2, 3, 3}, /*mode 6*/
-  //     {0, 0, 0, 1, 1, 1, 2, 3, 1, 1, 1, 2, 1, 1, 2, 3}, /*mode 7*/
-  //     {0, 0, 2, 2, 1, 1, 3, 3, 0, 0, 2, 2, 1, 1, 3, 3}, /*mode 8*/
-  //     {0, 0, 1, 2, 0, 0, 2, 3, 0, 0, 1, 2, 0, 0, 2, 3}, /*mode 9*/
-  //     {0, 0, 2, 2, 2, 2, 3, 3, 0, 0, 2, 2, 2, 2, 3, 3}, /*mode 10*/
-  //     {0, 0, 1, 2, 1, 1, 2, 3, 0, 0, 1, 2, 1, 1, 2, 3}, /*mode 11*/
-  // };
 
   std::size_t screen_width = fx * xsize;
 
@@ -170,8 +152,8 @@ void Window::Render(std::size_t fx, std::size_t fy, std::uint32_t *pixels) {
                                        translated_ch * character_size_in_bytes +
                                        fr * font_row_size_in_bytes;
 
-        const unsigned mode = cell.italic * (fr * 8 / fy) + 8 * cell.intense +
-                              16 * cell.bold + 32 * cell.dim;
+        const unsigned mode =
+            cell.italic * (fr * 8 / fy) + 8 * cell.bold + 16 * cell.dim;
 
         unsigned widefont = fontptr[0];
         if (!cell.italic)
