@@ -1,9 +1,9 @@
 #include "forkpty.hh"
-#include <asm-generic/ioctls.h>
 #include <cstdlib>
 #include <fcntl.h>
 #include <pty.h>
 #include <sys/ioctl.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 void ForkPTY::Open(std::size_t w, std::size_t h) {
@@ -41,4 +41,10 @@ void ForkPTY::Resize(unsigned xsize, unsigned ysize) {
   ws.ws_col = xsize;
   ws.ws_row = ysize;
   ioctl(fd, TIOCSWINSZ, &ws);
+}
+
+void ForkPTY::Close() {
+  kill(pid, SIGTERM);
+  close(fd);
+  waitpid(pid, nullptr, 0);
 }

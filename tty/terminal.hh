@@ -27,29 +27,10 @@ private:
   void yscroll_up(unsigned y1, unsigned y2, int amount) const;
 
   void Lf();
-  void Ri();
 
-  inline void csi_J(unsigned c) const;
-  void csi_K(unsigned c) const;
-
-  void csi_L(int c) const {
-    if (c == 0)
-      c = 1;
-    yscroll_down(cy, bottom, c);
-  }
-
-  inline void csi_M(int c) const {
-    if (c == 0)
-      c = 1;
-    yscroll_up(cy, bottom, c);
-  }
-
-  inline void csi_P(unsigned c) const;
-  inline void csi_X(unsigned c) const;
-  void csi_at(unsigned c) const;
-
+  void ResetFG();
+  void ResetBG();
   void ResetAttr();
-  void BuildAttr();
 
 public:
   std::deque<char32_t> OutBuffer;
@@ -59,33 +40,21 @@ private:
   Window &wnd;
 
   int top, bottom;
-  signed char intensity, italic, underline, blink, reverse, bold;
-  unsigned fgc, bgc;
   char g0set, g1set, activeset, utfmode, translate;
+  char32_t lastch = U' ';
   unsigned utflength;
   unsigned long utfvalue;
 
-  enum {
-    ESnormal,
-    ESesc,
-    ESsquare,
-    ESgetpars,
-    ESgotpars,
-    EShash,
-    ESignore,
-    ESescnext,
-    ESnonstd,
-    ESsetG0,
-    ESsetG1,
-    ESpercent
-  } state;
-
-  std::vector<int> par;
-  int ques;
+  std::vector<unsigned> p;
+  unsigned state = 0;
 
   struct backup {
-    int cx, cy, i, I, u, b, r, B, f, g, top, bottom;
+    int cx, cy, top, bottom;
+    Cell attr;
   } backup;
+
+  std::u32string buf{};
+  std::size_t fill_req = 0;
 };
 
 #endif /* TERMINAL_H */

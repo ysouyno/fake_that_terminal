@@ -12,8 +12,10 @@
 #include <unordered_map>
 #include <vector>
 
-unsigned VidCellWidth = 8, VidCellHeight = 16;
-unsigned WindowWidth = 80, WindowHeight = 25;
+unsigned VidCellWidth = 8, VidCellHeight = 12;
+unsigned WindowWidth = 129, WindowHeight = 40;
+float DefaultWindowScaleX = 3.f;
+float DefaultWindowScaleY = 4.f;
 
 namespace {
 SDL_Window *window = nullptr;
@@ -41,11 +43,13 @@ void SDL_ReInitialize(unsigned cells_horizontal, unsigned cells_vertial) {
           bufpixels_height);
 
   if (!window) {
-    window = SDL_CreateWindow("terminal", SDL_WINDOWPOS_UNDEFINED,
-                              SDL_WINDOWPOS_UNDEFINED, pixels_width * 2,
-                              pixels_height * 2, SDL_WINDOW_RESIZABLE);
+    window = SDL_CreateWindow(
+        "terminal", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+        pixels_width * DefaultWindowScaleX, pixels_height * DefaultWindowScaleY,
+        SDL_WINDOW_RESIZABLE);
   } else {
-    SDL_SetWindowSize(window, pixels_width * 2, pixels_height * 2);
+    SDL_SetWindowSize(window, pixels_width * DefaultWindowScaleX,
+                      pixels_height * DefaultWindowScaleY);
   }
 
   if (!renderer) {
@@ -137,14 +141,15 @@ int main() {
   SDL_StartTextInput();
 
   std::unordered_map<int, bool> keys;
+  bool quit = false;
 
-  for (;;) {
-    struct pollfd p[2] = {{tty.getfd(), POLLIN, 0}, {0, POLLIN, 0}};
+  while (!quit) {
+    struct pollfd p[2] = {{tty.getfd(), POLLIN, 0}};
     if (!term.OutBuffer.empty() || !outbuffer.empty()) {
       p[0].events |= POLLOUT;
     }
 
-    int pollres = poll(p, 2, 30);
+    int pollres = poll(p, 1, 30);
     if (pollres < 0)
       break;
 
@@ -154,12 +159,8 @@ int main() {
       term.Write(FromUTF8(str));
     }
 
-    if (p[1].revents & POLLIN) {
-      char Buf[4096];
-      int r = read(0, Buf, sizeof(Buf));
-      if (r > 0) {
-        tty.Send(std::string_view(Buf, r));
-      }
+    if (p[0].revents & (POLLERR | POLLHUP)) {
+      quit = true;
     }
 
     if (!term.OutBuffer.empty()) {
@@ -173,6 +174,8 @@ int main() {
         outbuffer.erase(0, r);
     }
 
+    std::string pending_input;
+
     for (SDL_Event ev; SDL_PollEvent(&ev);) {
       switch (ev.type) {
       case SDL_WINDOWEVENT:
@@ -180,11 +183,14 @@ int main() {
         case SDL_WINDOWEVENT_EXPOSED:
         case SDL_WINDOWEVENT_RESIZED:
         case SDL_WINDOWEVENT_SIZE_CHANGED:
+          wnd.Dirtify();
           break;
         default:
           break;
         }
+        break;
       case SDL_QUIT:
+        quit = true;
         break;
       case SDL_TEXTINPUT:
         tty.Send(ev.text.text);
@@ -207,60 +213,103 @@ int main() {
               {SDLK_F11, {23, '~'}}, {SDLK_F12, {24, '~'}},
           };
 
+          static const std::unordered_map<int, char> lore2{
+              {SDLK_a, 'a'},
+              {SDLK_b, 'b'},
+              {SDLK_c, 'c'},
+              {SDLK_d, 'd'},
+              {SDLK_e, 'e'},
+              {SDLK_f, 'f'},
+              {SDLK_g, 'g'},
+              {SDLK_h, 'h'},
+              {SDLK_i, 'i'},
+              {SDLK_j, 'j'},
+              {SDLK_k, 'k'},
+              {SDLK_l, 'l'},
+              {SDLK_m, 'm'},
+              {SDLK_n, 'n'},
+              {SDLK_o, 'o'},
+              {SDLK_p, 'p'},
+              {SDLK_q, 'q'},
+              {SDLK_r, 'r'},
+              {SDLK_s, 's'},
+              {SDLK_t, 't'},
+              {SDLK_u, 'u'},
+              {SDLK_v, 'v'},
+              {SDLK_w, 'w'},
+              {SDLK_x, 'x'},
+              {SDLK_y, 'y'},
+              {SDLK_z, 'z'},
+              {SDLK_ESCAPE, '\33'},
+              {SDLK_0, '0'},
+              {SDLK_1, '1'},
+              {SDLK_2, '2'},
+              {SDLK_3, '3'},
+              {SDLK_4, '4'},
+              {SDLK_5, '5'},
+              {SDLK_6, '6'},
+              {SDLK_7, '7'},
+              {SDLK_8, '8'},
+              {SDLK_9, '9'},
+              {SDLK_PERIOD, '.'},
+              {SDLK_COMMA, '-'},
+              {SDLK_RETURN, '\r'},
+              {SDLK_BACKSPACE, '\177'},
+              {SDLK_TAB, '\t'},
+          };
+
           bool shift = keys[SDLK_LSHIFT] || keys[SDLK_RSHIFT];
           bool alt = keys[SDLK_LALT] || keys[SDLK_RALT];
           bool ctrl = keys[SDLK_LCTRL] || keys[SDLK_RCTRL];
 
-          // F1 decrease rows
-          // F2 increase rows
-          // F3 decrease cols
-          // F4 increase cols
-
           bool processed = false;
           bool resized = false;
 
-          switch (ev.key.keysym.sym) {
-          case SDLK_F1:
-            wnd.Resize(wnd.xsize, wnd.ysize - 1);
-            resized = true;
-            break;
-          case SDLK_F2:
-            wnd.Resize(wnd.xsize, wnd.ysize + 1);
-            resized = true;
-            break;
-          case SDLK_F3:
-            wnd.Resize(wnd.xsize - 1, wnd.ysize);
-            resized = true;
-            break;
-          case SDLK_F4:
-            wnd.Resize(wnd.xsize + 1, wnd.ysize);
-            resized = true;
-            break;
-          case SDLK_F5:
-            if (VidCellHeight > 6)
-              --VidCellHeight;
-            resized = true;
-            break;
-          case SDLK_F6:
-            if (VidCellHeight < 32)
-              ++VidCellHeight;
-            resized = true;
-            break;
-          case SDLK_F7:
-            if (VidCellWidth > 8)
-              VidCellWidth /= 2;
-            resized = true;
-            break;
-          case SDLK_F8:
-            if (VidCellWidth <= 8)
-              VidCellWidth *= 2;
-            resized = true;
-            break;
+          if (!shift && !alt && !ctrl) {
+            switch (ev.key.keysym.sym) {
+            case SDLK_F1:
+              wnd.Resize(wnd.xsize, wnd.ysize - 1);
+              resized = true;
+              break;
+            case SDLK_F2:
+              wnd.Resize(wnd.xsize, wnd.ysize + 1);
+              resized = true;
+              break;
+            case SDLK_F3:
+              wnd.Resize(wnd.xsize - 1, wnd.ysize);
+              resized = true;
+              break;
+            case SDLK_F4:
+              wnd.Resize(wnd.xsize + 1, wnd.ysize);
+              resized = true;
+              break;
+            case SDLK_F5:
+              if (VidCellHeight > 6)
+                --VidCellHeight;
+              resized = true;
+              break;
+            case SDLK_F6:
+              if (VidCellHeight < 32)
+                ++VidCellHeight;
+              resized = true;
+              break;
+            case SDLK_F7:
+              if (VidCellWidth > 8)
+                VidCellWidth /= 2;
+              resized = true;
+              break;
+            case SDLK_F8:
+              if (VidCellWidth <= 8)
+                VidCellWidth *= 2;
+              resized = true;
+              break;
+            }
           }
 
           if (resized) {
             SDL_ReInitialize(wnd.xsize, wnd.ysize);
             tty.Resize(wnd.xsize, wnd.ysize);
+            wnd.Dirtify();
             processed = true;
           }
 
@@ -271,6 +320,8 @@ int main() {
             char bracket = '[', Buf[16];
             if (d.second >= 'P' && d.second <= 'S')
               bracket = 'O';
+            if (d.second >= 'A' && d.second <= 'B' && delta == 1)
+              bracket = 'O';
             if (delta != 1)
               len = std::sprintf(Buf, "\33%c%d;%d%c", bracket, d.first, delta,
                                  d.second);
@@ -279,43 +330,51 @@ int main() {
             else
               len = std::sprintf(Buf, "\33%c%d%c", bracket, d.first, d.second);
 
-            tty.Send(std::string_view(Buf, len));
-          } else if (ctrl && (ev.key.keysym.sym >= SDLK_a &&
-                              ev.key.keysym.sym <= SDLK_z)) {
-            char c = ev.key.keysym.sym - SDLK_a + 1;
-            tty.Send(std::string_view(&c, 1));
-          } else if (ctrl && ev.key.keysym.sym >= SDLK_2 &&
-                     ev.key.keysym.sym <= SDLK_9) {
-            char c = ev.key.keysym.sym - SDLK_3 + 27;
-            if (c == 26)
-              c = 0;
-            tty.Send(std::string_view(&c, 1));
-          } else
-            switch (ev.key.keysym.sym) {
-            case SDLK_RETURN:
-              tty.Send("\r");
-              break;
-            case SDLK_BACKSPACE:
-              if (ctrl)
-                tty.Send("\10");
+            pending_input.append(Buf, len);
+          } else if (auto i = lore2.find(ev.key.keysym.sym); i != lore2.end()) {
+            char32_t cval = i->second;
+            bool digit = cval >= '0' && cval <= '9';
+            bool alpha = cval >= 'a' && cval <= 'z';
+            if (shift && alpha)
+              cval &= ~0x20; // Turn uppercase
+            if (ctrl && digit)
+              cval = "01\0\33\34\35\36\37\1779"[cval - '0'];
+            if (ctrl && i->second == '\177')
+              cval = '\b';
+            else if (ctrl && !digit)
+              cval &= 0x1F; // Turn into a control character
+            // CTRL a..z becomes 01...1A
+            // CTRL 0..9 becomes 10...19, should becomd xx, xx, 00, 1B-1F, 7F,
+            // xx
+            if (alt)
+              cval |= 0x80; // Add ALT
+            if ((!alpha && !digit) || ctrl || alt) {
+              if (shift && cval == '\t')
+                pending_input += "\33[Z";
               else
-                tty.Send("\b");
-              break;
-            case SDLK_TAB:
-              if (shift)
-                tty.Send("\33[[Z");
-              else
-                tty.Send("\t");
-              break;
+                pending_input += ToUTF8(std::u32string_view(&cval, 1));
             }
+
+            // Put the input in "pending_input", so that it gets automatically
+            // canceled if a textinput event is generated.
+          }
+        } else {
+          if (!pending_input.empty()) {
+            tty.Send(std::move(pending_input));
+            pending_input.clear();
+          }
         }
         break;
       }
       }
     }
+    if (!pending_input.empty())
+      tty.Send(std::move(pending_input));
 
     SDL_ReDraw(wnd);
   }
 
+  tty.Kill(SIGHUP);
+  tty.Close();
   return 0;
 }

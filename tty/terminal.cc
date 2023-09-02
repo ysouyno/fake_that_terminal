@@ -1,43 +1,43 @@
 #include "terminal.hh"
+#include "ctype.hh"
+#include <array>
 #include <cstdio>
 #include <sstream>
 
-// RGB5650
-#define Make16(r, g, b)                                                        \
-  (((((unsigned(b)) & 0x1F) * 255 / 31)) |                                     \
-   ((((unsigned(g) << 1) & 0x3F) * 255 / 63) << 8) |                           \
-   ((((unsigned(r)) & 0x1F) * 255 / 31) << 16))
-
-static unsigned xterm256table[256] = {
-    Make16(0, 0, 0),  Make16(21, 0, 0),  Make16(0, 21, 0),  Make16(21, 5, 0),
-    Make16(0, 0, 21), Make16(21, 0, 21), Make16(0, 21, 21), Make16(21, 21, 21),
-    Make16(7, 7, 7),  Make16(31, 5, 5),  Make16(5, 31, 5),  Make16(31, 31, 5),
-    Make16(5, 5, 31), Make16(31, 5, 31), Make16(5, 31, 31), Make16(31, 31, 31)};
-
-static struct xterm256init {
-  xterm256init() {
-    static const unsigned char grayramp[24] = {1,  2,  3,  5,  6,  7,  8,  9,
-                                               11, 12, 13, 14, 16, 17, 18, 19,
-                                               20, 22, 23, 24, 25, 27, 28, 29};
-    static const unsigned char colorramp[6] = {0, 12, 16, 21, 26, 31};
-
-    for (unsigned n = 0; n < 216; ++n) {
-      xterm256table[16 + n] = Make16(
-          colorramp[(n / 36) % 6], colorramp[(n / 6) % 6], colorramp[(n) % 6]);
-    }
-
-    for (unsigned n = 0; n < 24; ++n) {
-      xterm256table[232 + n] = Make16(grayramp[n], grayramp[n], grayramp[n]);
-    }
-  }
-} xterm256initializer;
-
-static unsigned Translate16Color(unsigned c) {
-  fprintf(stderr, "16-color for %u is 0x%06X\n", c, xterm256table[c]);
-  return xterm256table[c];
+static constexpr unsigned Make16(unsigned r, unsigned g, unsigned b) {
+  return (((((unsigned(b)) & 0x1F) * 255 / 31)) |
+          ((((unsigned(g) << 1) & 0x3F) * 255 / 63) << 8) |
+          ((((unsigned(r)) & 0x1F) * 255 / 31) << 16));
 }
 
-static unsigned Translate256Color(unsigned c) { return xterm256table[c]; }
+static constexpr unsigned char grayramp[24] = {1,  2,  3,  5,  6,  7,  8,  9,
+                                               11, 12, 13, 14, 16, 17, 18, 19,
+                                               20, 22, 23, 24, 25, 27, 28, 29};
+
+static constexpr unsigned char colorramp[6] = {0, 12, 16, 21, 26, 31};
+
+static constexpr std::array<unsigned, 256> xterm256init() {
+  std::array<unsigned, 256> result = {
+      Make16(0, 0, 0),    Make16(21, 0, 0),   Make16(0, 21, 0),
+      Make16(21, 10, 0),  Make16(0, 0, 21),   Make16(21, 0, 21),
+      Make16(0, 21, 21),  Make16(21, 21, 21), Make16(15, 15, 15),
+      Make16(31, 10, 10), Make16(5, 31, 10),  Make16(31, 31, 10),
+      Make16(10, 10, 31), Make16(31, 10, 31), Make16(5, 31, 31),
+      Make16(31, 31, 31)};
+
+  for (unsigned n = 0; n < 216; ++n) {
+    result[16 + n] = Make16(colorramp[(n / 36) % 6], colorramp[(n / 6) % 6],
+                            colorramp[(n) % 6]);
+  }
+
+  for (unsigned n = 0; n < 24; ++n) {
+    result[232 + n] = Make16(grayramp[n], grayramp[n], grayramp[n]);
+  }
+
+  return result;
+}
+
+static constexpr std::array<unsigned, 256> xterm256table = xterm256init();
 
 void termwindow::Reset() {
   cx = cy = top = 0;
@@ -48,65 +48,51 @@ void termwindow::Reset() {
   activeset = 0;
   translate = g0set;
   utfmode = 0;
-  utflength = 0;
-  utfvalue = 0;
-  state = ESnormal;
-  ques = 0;
-
-  csi_J(2);
+  wnd.fillbox(0, 0, wnd.xsize, wnd.ysize); // Clear screen
+  state = 0;
+  p.clear();
+  lastch = U' ';
+  wnd.reverse = false;
+  wnd.cursorvis = true;
 }
 
 void termwindow::save_cur() {
   backup.cx = cx;
   backup.cy = cy;
-  backup.i = intensity;
-  backup.I = italic;
-  backup.u = underline;
-  backup.b = blink;
-  backup.r = reverse;
-  backup.B = bold;
-  backup.f = fgc;
-  backup.g = bgc;
   backup.top = top;
   backup.bottom = bottom;
+  backup.attr = wnd.blank;
 }
 
 void termwindow::restore_cur() {
   cx = backup.cx;
   cy = backup.cy;
-  intensity = backup.i;
-  italic = backup.I;
-  underline = backup.u;
-  blink = backup.b;
-  reverse = backup.r;
-  bold = backup.B;
-  fgc = backup.f;
-  bgc = backup.g;
   top = backup.top;
   bottom = backup.bottom;
+  wnd.blank = backup.attr;
 }
 
 void termwindow::ScrollFix() {
-  if (cx >= wnd.xsize) {
+  if (cx >= int(wnd.xsize)) {
     cx = 0;
     Lf();
   }
 }
 
 void termwindow::FixCoord() {
-  if (bottom >= wnd.ysize)
+  if (bottom >= int(wnd.ysize))
     bottom = wnd.ysize - 1;
-  if (top > bottom - 2)
-    top = bottom - 2;
+  if (top > bottom - 1)
+    top = bottom - 1;
   if (top < 0)
     top = 0;
-  if (bottom < top + 2)
-    bottom = top + 2;
+  if (bottom < top + 1)
+    bottom = top + 1;
   if (cx < 0)
     cx = 0;
   if (cy < 0)
     cy = 0;
-  if (cx >= wnd.xsize)
+  if (cx >= int(wnd.xsize))
     cx = wnd.xsize - 1;
   if (cy >= bottom)
     cy = bottom;
@@ -114,19 +100,23 @@ void termwindow::FixCoord() {
 
 void termwindow::yscroll_down(unsigned y1, unsigned y2, int amount) const {
   unsigned hei = y2 - y1 + 1;
-  if (amount > hei)
+  if (unsigned(amount) > hei)
     amount = hei;
 
-  wnd.copytext(0, y1 + amount, 0, y1, wnd.xsize, (y2 - (y1 + amount)) + 1);
+  fprintf(stderr, "Height = %d, amount = %d, scrolling DOWN by %d lines\n", hei,
+          amount, hei - amount);
+  wnd.copytext(0, y1 + amount, 0, y1, wnd.xsize, hei - amount);
   wnd.fillbox(0, y1, wnd.xsize, amount);
 }
 
 void termwindow::yscroll_up(unsigned y1, unsigned y2, int amount) const {
   unsigned hei = y2 - y1 + 1;
-  if (amount > hei)
+  if (unsigned(amount) > hei)
     amount = hei;
 
-  wnd.copytext(0, y1, 0, y1 + amount, wnd.xsize, (y2 - amount - y1) + 1);
+  fprintf(stderr, "Height = %d, amount = %d, scrolling UP by %d lines\n", hei,
+          amount, hei - amount);
+  wnd.copytext(0, y1, 0, y1 + amount, wnd.xsize, hei - amount);
   wnd.fillbox(0, y2 - amount + 1, wnd.xsize, amount);
 }
 
@@ -138,87 +128,14 @@ void termwindow::Lf() {
   }
 }
 
-void termwindow::Ri() {
-  if (cy <= top) {
-    yscroll_down(top, bottom, 1);
-  } else {
-    --cy;
-  }
-}
+void termwindow::ResetFG() { wnd.blank.fgcolor = xterm256table[7]; }
 
-void termwindow::csi_J(unsigned c) const {
-  switch (c) {
-  case 0:
-    csi_K(0);
-    if (cy < wnd.ysize - 1)
-      wnd.fillbox(0, cy + 1, wnd.xsize, wnd.ysize - cy - 1);
-    break;
-  case 1:
-    if (cy > 0)
-      wnd.fillbox(0, 0, wnd.xsize, cy);
-    csi_K(1);
-    break;
-  case 2:
-    wnd.fillbox(0, 0, wnd.xsize, wnd.ysize);
-    break;
-  }
-}
-
-void termwindow::csi_K(unsigned c) const {
-  switch (c) {
-  case 0:
-    wnd.fillbox(cx, cy, wnd.xsize - cx, 1);
-    break;
-  case 1:
-    wnd.fillbox(0, cy, cx + 1, 1);
-    break;
-  case 2:
-    wnd.fillbox(0, cy, wnd.xsize, 1);
-    break;
-  }
-}
-
-void termwindow::csi_P(unsigned c) const {
-  if (cx + c > wnd.xsize)
-    c = wnd.xsize - cx;
-  if (c == 0)
-    return;
-
-  unsigned remain = wnd.xsize - (cx + c);
-  wnd.copytext(cx, cy, wnd.xsize - remain, cy, remain, 1);
-  wnd.fillbox(wnd.xsize - c, cy, c, 1);
-}
-
-void termwindow::csi_X(unsigned c) const { wnd.fillbox(cx, cy + top, c, 1); }
-
-void termwindow::csi_at(unsigned c) const {
-  if (cx + c > wnd.xsize)
-    c = wnd.xsize - cx;
-  if (c == 0)
-    return;
-
-  unsigned remain = wnd.xsize - (cx + c);
-  wnd.copytext(cx + c, cy, cx, cy, remain, 1);
-  wnd.fillbox(cx, cy, c, 1);
-}
+void termwindow::ResetBG() { wnd.blank.bgcolor = xterm256table[0]; }
 
 void termwindow::ResetAttr() {
-  intensity = italic = underline = blink = reverse = bold = 0;
-  bgc = Translate16Color(0);
-  fgc = Translate16Color(7);
-}
-
-void termwindow::BuildAttr() {
-  wnd.blank.fgcolor = fgc;
-  wnd.blank.bgcolor = bgc;
-  wnd.blank.intense = intensity > 0;
-  wnd.blank.bold = bold;
-  wnd.blank.dim = intensity < 0;
-  wnd.blank.italic = italic;
-  wnd.blank.underline = underline == 1;
-  wnd.blank.underline2 = underline == 2;
-  wnd.blank.overstrike = 0;
-  wnd.blank.reverse = reverse;
+  wnd.blank = Cell{};
+  ResetFG();
+  ResetBG();
 }
 
 void termwindow::EchoBack(std::u32string_view buffer) {
@@ -226,423 +143,746 @@ void termwindow::EchoBack(std::u32string_view buffer) {
 }
 
 void termwindow::Write(std::u32string_view s) {
-  unsigned a, b = s.size();
-  for (a = 0; a < b; ++a) {
-    char32_t c = s[a];
-    switch (c) {
-    case 7:
+  enum States : unsigned {
+    st_default,
+    st_esc,
+    st_scs0,        // esc (
+    st_scs1,        // esc )
+    st_scr,         // esc #
+    st_esc_percent, // esc %
+    st_csi,         // esc [
+    st_csi_dec,     // csi ?
+    st_csi_dec2,    // csi >
+    st_csi_dec3,    // csi =
+    st_csi_ex,      // csi !
+    //
+    st_num_states
+  };
+
+  auto GetParams = [&](unsigned min_params, bool change_zero_to_one) {
+    if (p.size() < min_params) {
+      p.resize(min_params);
+    }
+    if (change_zero_to_one)
+      for (auto &v : p)
+        if (!v)
+          v = 1;
+    state = st_default;
+  };
+
+  unsigned color = 0;
+  auto State = [](char32_t c, unsigned st) constexpr {
+    return c * st_num_states + st;
+  };
+
+  for (char32_t c : s)
+    switch (State(c, state)) {
+#define CsiState(c)                                                            \
+  State(c, st_csi)                                                             \
+      : case State(c, st_csi_dec2)                                             \
+      : case State(c, st_csi_dec)                                              \
+      : case State(c, st_csi_dec3) : case State(c, st_csi_ex)
+#define AnyState(c)                                                            \
+  State(c, st_default)                                                         \
+      : case State(c, st_esc)                                                  \
+      : case State(c, st_scs0)                                                 \
+      : case State(c, st_scs1)                                                 \
+      : case State(c, st_scr)                                                  \
+      : case State(c, st_esc_percent) : case CsiState(c)
+
+      // Note: These escapes are recognized even in the middle of an ANSI/VT
+      // code.
+    case AnyState(U'\7'): {
+      lastch = c;
       // BeepOn();
-      goto handled;
-    case 8:
+      break;
+    }
+    case AnyState(U'\b'): {
+      lastch = c;
       ScrollFix();
       if (cx > 0) {
         --cx;
       }
-      goto handled;
-    case 9:
-      ScrollFix();
-      cx += 8 - (cx & 7);
-      FixCoord();
-      goto handled;
-    case 10:
-    case 11:
-    case 12:
-    Linefeed:
-      ScrollFix();
-      {
-        if (cy == bottom) {
-          int pending_linefeeds = 1;
-          for (unsigned c = a + 1; c < b; ++c) {
-            if (s[c] == 10 || s[c] == 11 || s[c] == 12) {
-            CalcLF:
-              pending_linefeeds += 1;
-              if (pending_linefeeds >= bottom - top + 1)
-                break;
-            } else if (s[c] == U'\033') {
-              if (++c >= b)
-                break;
-              if (s[c] == U'D' || s[c] == U'E')
-                goto CalcLF;
-              if (s[c++] != U'[')
-                break;
-              if (c < b && s[c] == U'?')
-                ++c;
-              while (c < b && ((s[c] >= U'0' && s[c] <= U'9') || s[c] == U';'))
-                ++c;
-              if (c >= b)
-                break;
-
-              if (s[c] != U'm' && s[c] != U'C' && s[c] != U'D' &&
-                  s[c] != U'K' && s[c] != U'G')
-                break;
-            } else {
-            }
-          }
-
-          yscroll_up(top, bottom, pending_linefeeds);
-          cy -= pending_linefeeds - 1;
-          if (cy < top)
-            cy = top;
-          goto handled;
-        }
-
-        Lf();
-        goto handled;
-      }
-    case 13:
-      cx = 0;
-      goto handled;
-    case 14:
-      activeset = 1;
-      translate = g1set;
-      goto handled;
-    case 15:
-      activeset = 0;
-      translate = g0set;
-      goto handled;
-    case 24:
-    case 26:
-      state = ESnormal;
-      goto handled;
-    case 27:
-      state = ESescnext;
-      break;
-    case 127:
-      goto handled;
-    case 128 + 27:
-      state = ESesc;
       break;
     }
-
-    switch (state) {
-    case ESescnext:
-      state = ESesc;
+    case AnyState(U'\t'): {
+      lastch = c;
+      ScrollFix();
+      cx += 8 - (cx & 7);
+    cmov:
+      FixCoord();
       break;
-    case ESnormal:
+    }
+    case AnyState(U'\r'): {
+      lastch = c;
+      cx = 0;
+      break;
+    }
+    case AnyState(U'\16'): {
+      activeset = 1;
+      translate = g1set;
+      break;
+    }
+    case AnyState(U'\17'): {
+      activeset = 0;
+      translate = g0set;
+      break;
+    }
+    case AnyState(U'\177'): { /* del - ignore */
+      break;
+    }
+    case AnyState(U'\30'):
+      [[fallthrough]];
+    case AnyState(U'\32'): {
+    Ground:
+      state = st_default;
+      break;
+    }
+    case State(U'\33', st_default):
+      state = st_esc;
+      p.clear();
+      break;
+    case State(U'(', st_esc):
+      state = st_scs0;
+      break; // esc (
+    case State(U')', st_esc):
+      state = st_scs1;
+      break; // esc )
+    case State(U'#', st_esc):
+      state = st_scr;
+      break; // esc #
+    case State(U'[', st_esc):
+      state = st_csi;
+      break; // esc [
+    case State(U'%', st_esc):
+      state = st_esc_percent;
+      break; // esc %
+    case State(U'?', st_csi):
+      state = st_csi_dec;
+      break; // csi ?
+    case State(U'>', st_csi):
+      state = st_csi_dec2;
+      break; // csi >
+    case State(U'=', st_csi):
+      state = st_csi_dec3;
+      break; // csi =
+    case State(U'!', st_csi):
+      state = st_csi_ex;
+      break; // csi !
+
+    case CsiState(U'0'):
+    case CsiState(U'1'):
+    case CsiState(U'2'):
+    case CsiState(U'3'):
+    case CsiState(U'4'):
+    case CsiState(U'5'):
+    case CsiState(U'6'):
+    case CsiState(U'7'):
+    case CsiState(U'8'):
+    case CsiState(U'9'):
+      if (p.empty())
+        p.emplace_back();
+      p.back() = p.back() * 10u + (c - U'0');
+      break;
+    case CsiState(U':'):
+    case CsiState(U';'):
+      p.emplace_back();
+      break;
+
+    case State(U'E', st_esc): // esc E = CR + LF
+      cx = 0;
+      state = st_default;
+      [[fallthrough]];
+    case AnyState(10):
+    case AnyState(11):
+    case AnyState(12):
+      lastch = c;
+      ScrollFix();
+      Lf();
+      break;
+
+    case State(U'M', st_esc): // esc M, Ri (FIXME verify that this is right?)
+      /* Within window: move cursor up; scroll the window down if at top */
+      if (cy > top)
+        --cy;
+      else
+        yscroll_down(top, bottom, 1);
+      goto Ground;
+    case State(U'c', st_esc):
+      Reset();
+      break; // esc c
+    case State(U'7', st_esc):
+      [[fallthrough]]; // esc 7, csi s
+    case State(U's', st_csi):
+      save_cur();
+      goto Ground;
+    case State(U'8', st_esc):
+      [[fallthrough]]; // esc 8, csi u
+    case State(U'u', st_csi):
+      restore_cur();
+      goto Ground;
+    case State(U'B', st_scs0): // esc ( B
+      g0set = 0;
+    ActG0:
+      if (activeset == 0)
+        translate = g0set;
+      goto Ground;
+    case State(U'0', st_scs0):
+      g0set = 1;
+      goto ActG0; // esc ( 0
+    case State(U'U', st_scs0):
+      g0set = 2;
+      goto ActG0; // esc ( U
+    case State(U'K', st_scs0):
+      g0set = 3;
+      goto ActG0;              // esc ( K
+    case State(U'B', st_scs1): // esc ) B
+      g1set = 0;
+    ActG1:
+      if (activeset == 1)
+        translate = g1set;
+      goto Ground;
+    case State(U'0', st_scs1):
+      g1set = 1;
+      goto ActG1; // esc ) 0
+    case State(U'U', st_scs1):
+      g1set = 2;
+      goto ActG1; // esc ) U
+    case State(U'K', st_scs1):
+      g1set = 3;
+      goto ActG1;             // esc ) K
+    case State(U'8', st_scr): // clear screen with 'E' // esc # 8
+      wnd.blank.ch = U'E';
+      wnd.fillbox(0, 0, wnd.xsize, wnd.ysize);
+      wnd.blank.ch = U' ';
+      goto Ground;
+    case State(U'@', st_esc_percent):
+      utfmode = 0;
+      goto Ground; // esc % @
+    case State(U'G', st_esc_percent):
+      [[fallthrough]]; // esc % G
+    case State(U'8', st_esc_percent):
+      utfmode = 1;
+      goto Ground;            // esc % 8
+    case State(U'g', st_csi): /* TODO: set tab stops */
+      goto Ground;
+    case State(U'q', st_csi): /* TODO: set leds */
+      goto Ground;
+    case State(U'G', st_csi):
+      [[fallthrough]];
+    case State(U'`', st_csi): { // absolute hpos
+      GetParams(1, true);
+      cx = p[0] - 1;
+      goto cmov;
+    }
+    case State(U'd', st_csi): { // absolute vpos
+      GetParams(1, true);
+      cy = p[0] - 1;
+      goto cmov;
+    }
+    case State(U'F', st_csi):
+      cx = 0;
+      [[fallthrough]];
+    case State(U'A', st_csi): {
+      GetParams(1, true);
+      cy -= p[0];
+      goto cmov;
+    }
+    case State(U'E', st_csi):
+      cx = 0;
+      [[fallthrough]];
+    case State(U'e', st_csi):
+      [[fallthrouth]];
+    case State(U'B', st_csi): {
+      GetParams(1, true);
+      cy += p[0];
+      goto cmov;
+    }
+    case State(U'a', st_csi):
+      [[fallthrouth]];
+    case State(U'C', st_csi): {
+      GetParams(1, true);
+      cx += p[0];
+      goto cmov;
+    }
+    case State(U'D', st_csi): {
+      GetParams(1, true);
+      cx -= p[0];
+      goto cmov;
+    }
+    case State(U'H', st_csi):
+      [[fallthrough]];
+    case State(U'f', st_csi): {
+      GetParams(2, true);
+      cx = p[1] - 1;
+      cy = p[0] - 1;
+      goto cmov;
+    }
+    case State(U'J', st_csi):
+      GetParams(1, false);
+      switch (p[0]) {
+      case 0: // erase from cursor to end of display
+        if (unsigned(cy) < wnd.ysize - 1)
+          wnd.fillbox(0, cy + 1, wnd.xsize, wnd.ysize - cy - 1);
+        goto clreol;
+      case 1: // erase from start to cursor
+        if (cy > 0)
+          wnd.fillbox(0, 0, wnd.xsize, cy);
+        goto clrbol;
+      case 2: // erase whole display
+        wnd.fillbox(0, 0, wnd.xsize, wnd.ysize);
+        break;
+      }
+      break;
+    case State(U'K', st_csi):
+      GetParams(1, false);
+      // 0: erase from cursor to end of line
+      // 1: erase from start of line to cursor
+      // 2: erase whole line
+      switch (p[0]) {
+      case 0:
+      clreol:
+        wnd.fillbox(cx, cy, wnd.xsize - cx, 1);
+        break;
+      case 1:
+      clrbol:
+        wnd.fillbox(0, cy, cx + 1, 1);
+        break;
+      case 2:
+        wnd.fillbox(0, cy, wnd.xsize, 1);
+        break;
+      }
+      break;
+    case State(U'L', st_csi):
+      GetParams(1, true);
+      // scroll the rest of window c lines down,
+      // including where cursor is. Don't move cursor.
+      yscroll_down(cy, bottom, p[0]);
+      break;
+    case State(U'M', st_csi):
+      GetParams(1, true);
+      yscroll_up(cy, bottom, p[0]);
+      break;
+    case State(U'S', st_csi): // xterm version?
+      GetParams(1, true);
+      yscroll_up(top, bottom, p[0]);
+      break;
+    case State(U'T', st_csi): // csi T, track mouse
+      if (p.size() > 1 || p.empty() || p[0] == 0) {
+        // mouse track
+        goto Ground;
+      }
+      [[fallthrough]];
+    case State(U'^', st_csi): // csi ^, scroll down
+      GetParams(1, true);
+      // Reverse scrolling by N lines
+      // scroll the entire of window c lines down. Don't move cursor.
+      yscroll_down(top, bottom, p[0]);
+      break;
+    case State(U'P', st_csi):
+      GetParams(1, true);
+      c = p[0];
+      // insert c black holes at cursor (eat c characters
+      // and scroll line horizontally to left)
+      if (cx + c > wnd.xsize)
+        c = wnd.xsize - cx;
+      if (c) {
+        unsigned remain = wnd.xsize - (cx + c);
+        wnd.copytext(cx, cy, wnd.xsize - remain, cy, remain, 1);
+        wnd.fillbox(wnd.xsize - c, cy, c, 1);
+      }
+      break;
+    case State(U'X', st_csi):
+      GetParams(1, true);
+      // write c spaces at cursor (overwrite)
+      wnd.fillbox(cx, cy + top, p[0], 1);
+      break;
+    case State(U'@', st_csi):
+      GetParams(1, true);
+      c = p[0];
+      // insert c spaces at cursor
+      if (cx + c > wnd.xsize)
+        c = wnd.xsize - cx;
+      if (c) {
+        unsigned remain = wnd.xsize - (cx + c);
+        wnd.copytext(cx + c, cy, cx, cy, remain, 1);
+        wnd.fillbox(cx, cy, c, 1);
+      }
+      break;
+    case State(U'r', st_csi):
+      [[fallthrough]];           // CSI r
+    case State(U'p', st_csi_ex): // CSI ! p
+      GetParams(2, false);
+      if (!p[0])
+        p[0] = 1;
+      if (!p[1])
+        p[1] = wnd.ysize;
+      if (p[0] < p[1] && p[1] <= wnd.ysize) {
+        top = p[0] - 1;
+        bottom = p[1] - 1;
+        fprintf(stderr, "Create a window with top = %d, bottom = %d\n", top,
+                bottom);
+        cx = 0;
+        cy = top;
+        goto cmov;
+      }
+      break;
+    case State(U'n', st_csi):
+      GetParams(1, false);
+      switch (p[0]) {
+        char Buf[32];
+      case 5:
+        EchoBack(U"\33[0n");
+        break;
+      case 6:
+        EchoBack(FromUTF8(
+            std::string_view{Buf, (std::size_t)std::sprintf(Buf, "\33[%d;%dR",
+                                                            cy + 1, cx + 1)}));
+        break;
+      }
+      break;
+    case State(U'c',
+               st_csi_dec3): // csi = 0 c, Tertiary device attributes (printer?)
+      GetParams(1, false);   // Tertiary device attributes (printer?)
+      // Example response: ^[P!|0^[ (backslash)
+      if (!p[0])
+        EchoBack(U"\33P!|00000000\x9C");
+      break;
+    case State(
+        U'c',
+        st_csi_dec2): // csi > 0 c, Secondary device attributes (terminal)
+      GetParams(1, false);
+      // Example response: ^[[>41;330;0c (middle = firmware version)
+      if (!p[0])
+        EchoBack(U"\33[>1;1;0c");
+      break;
+    case State(U'Z', st_esc):
+      [[falthrough]]; // esc Z
+    case State(U'c',
+               st_csi): // csi 0 c // Primary device attributes (host computer)
+      GetParams(1, false);
+      if (!p[0])
+        EchoBack(U"\33[?65;1;6;8;15;22c");
+      // Example response: ^[[?64;1;2;6;9;15;18;21;22c
+      // 1 = 132 columns, 2 = printer port, 4 = sixel extension,
+      // 6 = selective erase, 7 = DRCS, 8 = user-defines keys,
+      // 9 = national replacement charsets, 12 = SCS extension,
+      // 15 = technical charset, 18 = windowing capability,
+      // 21 = horiz scrolling, 22 = ansi color/vt525,
+      // 29 = ansi text locator, 23 = greek ext, 24 = turkish ext,
+      // 42 = latin2 cset, 44 = pcterm, 45 = softkeymap,
+      // 46 = ascii emulation,
+      // 62..69 = VT level (62 = VT200, 63 = VT300, 64 = VT400)
+      break;
+    case State(U'h', st_csi_dec):   // csi ? h, misc modes on
+    case State(U'l', st_csi_dec): { // csi ? l, misc modes off
+      bool set = c == U'h';
+      // 1 = CKM, 2 = ANM, 3 = COLM, 4 = SCLM, 5 = SCNM, 6 = OM, 7 = AWM,
+      // 8 = ARM, 18 = PFF, 19 = PEX, 25 = TCEM, 40 = 132COLS, 42 = NRCM,
+      // 44 = MARGINBELL, ...
+      // 6 puts cursor at (0,0) both set,clear
+      // 25 enables/disables cursor visibility
+      // 40 enables/disables 80/132 mode (note: if enabled, RESET changes to one
+      // of these)
+      // 3 sets width at 132(enable), 80(disable) if "40" is enabled
+      // 5 = screenwide reverse color
+      GetParams(0, false);
+      for (auto a : p)
+        switch (a) {
+        case 6:
+          cx = cy = 0;
+          FixCoord();
+          break;
+        case 25:
+          wnd.cursorvis = set;
+          break;
+        case 3:
+          wnd.reverse = set;
+          break;
+        }
+      break;
+    }
+    case State(U'h', st_csi): // csi h, ansi modes on
+    case State(U'l', st_csi): // csi l, ansi modes off
+      goto Ground;
+    case State(U'b', st_csi):
+      GetParams(1, true);
+      // Repeat last printed character n times
+      for (unsigned m = std::min(p[0], unsigned(wnd.xsize * wnd.ysize)), c = 0;
+           c < m; ++c) {
+        ScrollFix();
+        wnd.PutCh(cx, cy, lastch, translate);
+        ++cx;
+      }
+      break;
+    case State(U'm', st_csi): { // csi m (SGR)
+      GetParams(1, false);      // Make sure there is at least 1 param
+      c = 0;
+      auto mode = [](unsigned n) constexpr { // room for 22
+        return 68 + n - 3;
+      };
+      auto flag = [](unsigned c, unsigned n) constexpr { // room for 8
+        return 10 + (n - 2) + (c - 1) * 4;
+      };
+      for (auto a : p)
+        switch (c < 3 ? ((c && (a >= 2 && a <= 5)) ? flag(c, a) : a)
+                      : mode(c)) {
+        case 0:
+          ResetAttr();
+          c = 0;
+          break;
+        case 1:
+          wnd.blank.bold = true;
+          c = 0;
+          break;
+        case 2:
+          wnd.blank.dim = true;
+          c = 0;
+          break;
+        case 3:
+          wnd.blank.italic = true;
+          c = 0;
+          break;
+        case 4:
+          wnd.blank.underline = true;
+          c = 0;
+          break;
+        case 5:
+          wnd.blank.blink = true;
+          c = 0;
+          break;
+        case 7:
+          wnd.blank.reverse = true;
+          c = 0;
+          break;
+        case 8:
+          wnd.blank.conceal = true;
+          c = 0;
+          break;
+        case 9:
+          wnd.blank.overstrike = true;
+          c = 0;
+          break;
+        case 20:
+          wnd.blank.fraktur = true;
+          c = 0;
+          break;
+        case 21:
+          wnd.blank.underline2 = true;
+          c = 0;
+          break;
+        case 22:
+          wnd.blank.dim = false;
+          wnd.blank.bold = false;
+          c = 0;
+          break;
+        case 23:
+          wnd.blank.italic = false;
+          wnd.blank.fraktur = false;
+          c = 0;
+          break;
+        case 24:
+          wnd.blank.underline = false;
+          wnd.blank.underline2 = false;
+          c = 0;
+          break;
+        case 25:
+          wnd.blank.blink = false;
+          c = 0;
+          break;
+        case 27:
+          wnd.blank.reverse = false;
+          c = 0;
+          break;
+        case 28:
+          wnd.blank.conceal = false;
+          c = 0;
+          break;
+        case 29:
+          wnd.blank.overstrike = false;
+          c = 0;
+          break;
+        case 39:
+          wnd.blank.underline = false;
+          wnd.blank.underline2 = false;
+          ResetFG();
+          c = 0;
+          break; // Set default foreground color
+        case 49:
+          ResetBG();
+          c = 0;
+          break; // Set default background color
+        case 51:
+          wnd.blank.framed = true;
+          c = 0;
+          break;
+        case 52:
+          wnd.blank.encircled = true;
+          c = 0;
+          break;
+        case 53:
+          wnd.blank.overlined = true;
+          c = 0;
+          break;
+        case 54:
+          wnd.blank.framed = false;
+          wnd.blank.encircled = false;
+          c = 0;
+          break;
+        case 55:
+          wnd.blank.overlined = false;
+          c = 0;
+          break;
+        case 38:
+          c = 1;
+          break;
+        case 48:
+          c = 2;
+          break;
+        case flag(1, 4):
+          c = 3;
+          color = 0;
+          break; // 38;4
+        case flag(1, 3):
+          c = 4;
+          color = 0;
+          break; // 38;3
+        case flag(1, 2):
+          c = 5;
+          color = 0;
+          break; // 38;2
+        case flag(2, 4):
+          c = 6;
+          color = 0;
+          break; // 48;4
+        case flag(2, 3):
+          c = 7;
+          color = 0;
+          break; // 48;3
+        case flag(2, 2):
+          c = 8;
+          color = 0;
+          break; // 48;2
+        case flag(1, 5):
+          c = 22;
+          break; // 38;5
+        case flag(2, 5):
+          c = 23;
+          break;       // 48;5
+        case mode(3):  // color = (color << 8) + a; c+=6; break; // 38;4;n
+        case mode(4):  // color = (color << 8) + a; c+=6; break; // 38;3;n
+        case mode(5):  // color = (color << 8) + a; c+=6; break; // 38;2;n
+        case mode(6):  // color = (color << 8) + a; c+=6; break; // 48;4;n
+        case mode(7):  // color = (color << 8) + a; c+=6; break; // 48;3;n
+        case mode(8):  // color = (color << 8) + a; c+=6; break; // 48;2;n
+        case mode(9):  // color = (color << 8) + a; c+=6; break; // 38;4;#;n
+        case mode(10): // color = (color << 8) + a; c+=6; break; // 38;3;#;n
+        case mode(11): // color = (color << 8) + a; c+=6; break; // 38;2;#;n
+        case mode(12): // color = (color << 8) + a; c+=6; break; // 48;4;#;n
+        case mode(13): // color = (color << 8) + a; c+=6; break; // 48;3;#;n
+        case mode(14): // color = (color << 8) + a; c+=6; break; // 48;2;#;n
+        case mode(15): // color = (color << 8) + a; c+=6; break; // 38;4;#;#;n
+        case mode(18):
+          color = (color << 8) + a;
+          c += 6;
+          break; // 48;4;#;#;n
+        case 30:
+        case 31:
+        case 32:
+        case 33:
+        case 34:
+        case 35:
+        case 36:
+        case 37:
+          a -= 30;
+          a += 90 - 8;
+          [[fallthrough]];
+        case 90:
+        case 91:
+        case 92:
+        case 93:
+        case 94:
+        case 95:
+        case 96:
+        case 97:
+          a -= 90 - 8;
+          [[fallthrough]];
+        case mode(22):
+          color = 0;
+          a = xterm256table[a & 0xFF];
+          [[fallthrough]]; // 38;5;n
+        case mode(21):
+          // color = (color << 8) + a;
+          // wnd.blank.fgcolor = color;
+          // c = 0;
+          // break; // 38;4;#;#;#;n (TODO CMYK->RGB)
+        case mode(16):
+          // color = (color << 8) + a;
+          // wnd.blank.fgcolor = color;
+          // c = 0;
+          // break; // 38;3;#;#;n   (TODO CMY->RGB)
+        case mode(17):
+          color = (color << 8) + a;
+          wnd.blank.fgcolor = color;
+          c = 0;
+          break; // 38;2;#;#;n   (RGB24)
+        case 40:
+        case 41:
+        case 42:
+        case 43:
+        case 44:
+        case 45:
+        case 46:
+        case 47:
+          a -= 40;
+          a += 100 - 8;
+          [[fallthrough]];
+        case 100:
+        case 101:
+        case 102:
+        case 103:
+        case 104:
+        case 105:
+        case 106:
+        case 107:
+          a -= 100 - 8;
+          [[fallthrough]];
+        case mode(23):
+          color = 0;
+          a = xterm256table[a & 0xFF];
+          [[fallthrough]]; // 48;5;n
+        case mode(24):
+          // color = (color << 8) + a;
+          // wnd.blank.bgcolor = color;
+          // c = 0;
+          // break; // 48;4;#;#;#;n (TODO CMYK->RGB)
+        case mode(19):
+          // color = (color << 8) + a;
+          // wnd.blank.bgcolor = color;
+          // c = 0;
+          // break; // 48;3;#;#;n   (TODO CMY->RGB)
+        case mode(20):
+          color = (color << 8) + a;
+          wnd.blank.bgcolor = color;
+          c = 0;
+          break; // 48;2;#;#;n   (RGB24)
+        default:
+          c = 0;
+          break;
+        }
+      break;
+    }
+    default:
+      if (state != st_default)
+        goto Ground;
       ScrollFix();
       wnd.PutCh(cx, cy, c, translate);
       ++cx;
       break;
-    case ESesc:
-      state = ESnormal;
-      switch (c) {
-      case U'[':
-        state = ESsquare;
-        break;
-      case U'%':
-        state = ESpercent;
-        break;
-      case U'E':
-        cx = 0;
-        goto Linefeed;
-      case U'M':
-        Ri();
-        break;
-      case U'D':
-        goto Linefeed;
-      case U'Z':
-        EchoBack(U"\33[?6c");
-        break;
-      case U'(':
-        state = ESsetG0;
-        break;
-      case U')':
-        state = ESsetG1;
-        break;
-      case U'#':
-        state = EShash;
-        break;
-      case U'7':
-        save_cur();
-        break;
-      case U'8':
-        restore_cur();
-        break;
-      case U'c':
-        Reset();
-        break;
-      }
-      break;
-    case ESsquare:
-      par.clear();
-      par.push_back(0);
-      state = ESgetpars;
-      if (c == U'[') {
-        state = ESignore;
-        break;
-      }
-
-      if (c == U'?') {
-        ques = 1;
-        break;
-      }
-      ques = 0;
-    case ESgetpars:
-      if (c == U';') {
-        par.push_back(0);
-        break;
-      }
-
-      if (c >= U'0' && c <= U'9') {
-        par.back() = par.back() * 10 + c - U'0';
-        break;
-      }
-      state = ESgotpars;
-      [[fallthrough]];
-    case ESgotpars:
-      state = ESnormal;
-      if (ques && (c == U'c' || c == U'm')) {
-        break;
-      }
-
-      switch (c) {
-      case U'h':
-        break;
-      case U'1':
-        break;
-      case U'n':
-        if (ques)
-          break;
-        if (par[0] == 5)
-          EchoBack(U"\033[0n");
-        else if (par[0] == 6) {
-          std::basic_ostringstream<char32_t> esc;
-          esc << U"\33[" << (cy + 1) << U';' << (cx + 1) << U'R';
-          EchoBack(std::move(esc.str()));
-        }
-        break;
-      case U'G':
-      case U'`':
-        if (par[0])
-          --par[0];
-        cx = par[0];
-        goto cmov;
-      case U'd':
-        if (par[0])
-          --par[0];
-        cy = par[0];
-        goto cmov;
-      case U'F':
-        cx = 0;
-        [[fallthrough]];
-      case U'A':
-        if (!par[0])
-          par[0] = 1;
-        cy -= par[0];
-        goto cmov;
-      case U'E':
-        cx = 0;
-        [[fallthrough]];
-      case U'B':
-        if (!par[0])
-          par[0] = 1;
-        cy += par[0];
-        goto cmov;
-      case U'C':
-        if (!par[0])
-          par[0] = 1;
-        cx += par[0];
-        goto cmov;
-      case U'D':
-        if (!par[0])
-          par[0] = 1;
-        cx -= par[0];
-      cmov:
-        FixCoord();
-        break;
-      case U'H':
-      case U'f':
-        par.resize(2);
-        if (par[0])
-          --par[0];
-        if (par[1])
-          --par[1];
-        cx = par[1];
-        cy = par[0];
-        break;
-      case U'J':
-        csi_J(par[0]);
-        break;
-      case U'K':
-        csi_K(par[0]);
-        break;
-      case U'L':
-        csi_L(par[0]);
-        break;
-      case U'M':
-        csi_M(par[0]);
-        break;
-      case U'P':
-        csi_P(par[0]);
-        break;
-      case U'X':
-        csi_X(par[0]);
-        break;
-      case U'@':
-        csi_at(par[0]);
-        break;
-      case U'c':
-        if (!par[0])
-          EchoBack(U"\33[?6c");
-        break;
-      case U'g':
-        break;
-      case U'q':
-        break;
-      case U'm': {
-        int mode256 = 0;
-        for (unsigned a = 0; a < par.size(); ++a) {
-          switch (par[a]) {
-          case 0:
-            mode256 = 0;
-            ResetAttr();
-            break;
-          case 1:
-            bold = 1;
-            break;
-          case 2:
-            if (!mode256)
-              intensity = -1;
-            else if (mode256 == 1) {
-              fgc = (par[a + 1] << 16) + (par[a + 2] << 8) + par[a + 3];
-              a += 3;
-            } else if (mode256 == 2) {
-              bgc = (par[a + 1] << 16) + (par[a + 2] << 8) + par[a + 3];
-              a += 3;
-            }
-            break;
-          case 3:
-            italic = 1;
-            break;
-          case 4:
-            underline = 1;
-            break;
-          case 5:
-            if (!mode256)
-              blink = 1;
-            else if (mode256 == 1) {
-              fgc = Translate256Color(par[++a]);
-            } else if (mode256 == 2) {
-              bgc = Translate256Color(par[++a]);
-            }
-            break;
-          case 7:
-            reverse = 1;
-            break;
-          case 21:
-            underline = 2;
-            break;
-          case 22:
-            intensity = 0;
-            bold = 0;
-            break;
-          case 23:
-            italic = 0;
-            break;
-          case 24:
-            underline = 0;
-            break;
-          case 25:
-            blink = 0;
-            break;
-          case 27:
-            reverse = 0;
-            break;
-          case 38:
-            mode256 = 1;
-            break;
-          case 39:
-            underline = 0;
-            fgc = Translate16Color(7);
-            break;
-          case 48:
-            mode256 = 2;
-            break;
-          case 49:
-            bgc = Translate16Color(0);
-            break;
-          default:
-            if (par[a] >= 30 && par[a] <= 37)
-              fgc = Translate16Color((par[a] - 30));
-            else if (par[a] >= 40 && par[a] <= 47)
-              bgc = Translate16Color((par[a] - 40));
-            else if (par[a] >= 90 && par[a] <= 97)
-              fgc = Translate16Color(8 | par[a] - 90);
-            else if (par[a] >= 100 && par[a] <= 107)
-              bgc = Translate16Color(8 | par[a] - 100);
-          }
-        }
-
-        BuildAttr();
-        break;
-      }
-      case U'r':
-        par.resize(2);
-        if (!par[0])
-          par[0] = 1;
-        if (!par[1])
-          par[1] = wnd.ysize;
-        if (par[0] < par[1] && par[1] <= wnd.ysize) {
-          top = par[0] - 1;
-          bottom = par[1] - 1;
-          cx = 0;
-          cy = top;
-        }
-        break;
-      case U's':
-        save_cur();
-        break;
-      case U'u':
-        restore_cur();
-        break;
-      }
-      break;
-    case EShash:
-      state = ESnormal;
-      if (c == U'8')
-        break;
-      break;
-    case ESignore:
-      state = ESnormal;
-      break;
-    case ESsetG0:
-      if (c == U'0')
-        g0set = 1;
-      else if (c == U'B')
-        g0set = 0;
-      else if (c == U'U')
-        g0set = 2;
-      else if (c == U'K')
-        g0set = 3;
-      if (activeset == 0)
-        translate = g0set;
-      state = ESnormal;
-      break;
-    case ESsetG1:
-      if (c == U'0')
-        g1set = 1;
-      else if (c == U'B')
-        g1set = 0;
-      else if (c == U'U')
-        g1set = 2;
-      else if (c == U'K')
-        g1set = 3;
-      if (activeset == 1)
-        translate = g1set;
-      state = ESnormal;
-      break;
-    case ESpercent:
-      state = ESnormal;
-      if (c == U'@')
-        utfmode = 0;
-      else if (c == U'G' || c == U'8')
-        utfmode = 1;
-      break;
     }
-  handled:;
-  }
+#undef AnyState
 
-  if (cx + 1 != wnd.xsize || cy + 1 != wnd.ysize) {
+  if ((cx + 1 != int(wnd.xsize) || cy + 1 != int(wnd.ysize))) {
     wnd.cursx = cx;
     wnd.cursy = cy;
   }

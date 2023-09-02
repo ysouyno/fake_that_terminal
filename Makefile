@@ -11,16 +11,19 @@ LDLIBS   += $(shell pkg-config sdl2 --libs)
 LDLIBS   += -lutil # for forkpty
 LDLIBS   += -lglog # for glog
 
-CPPFLAGS += -MP -MMD -MF$(subst .o,.d,$(addprefix .deps/,$@))
+CPPFLAGS += -MP -MMD -MF$(subst .o,.d,$(addprefix .deps/,$(subst /,_,$@)))
+
+CXXFLAGS += -pg
 
 OBJS = \
 	rendering/screen.o \
+	rendering/person.o \
 	tty/terminal.o \
 	tty/forkpty.o \
 	ctype.o \
 	main.o
 
--include $(addprefix .deps/,$(OBJS:.o:.d))
+-include $(addprefix .deps/,$(subst /,_,$(OBJS:.o:.d)))
 
 TARGET = main.out
 

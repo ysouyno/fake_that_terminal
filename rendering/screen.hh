@@ -14,19 +14,27 @@ struct Cell {
   char32_t ch = U' ';
   bool bold = false;
   bool dim = false;
-  bool intense = false;
   bool italic = false;
   bool underline = false;
   bool underline2 = false;
   bool overstrike = false;
   bool reverse = false;
+  bool blink = false;
+  bool framed = false;
+  bool encircled = false;
+  bool overlined = false;
+  bool fraktur = false;
+  bool conceal = false;
   bool dirty = true;
 
   bool operator==(const Cell &b) const {
     return std::tuple(fgcolor, bgcolor, ch, bold, dim, italic, underline,
-                      underline2, overstrike, reverse) ==
+                      underline2, overstrike, reverse, blink, framed, encircled,
+                      fraktur, conceal, overlined) ==
            std::tuple(b.fgcolor, b.bgcolor, b.ch, b.bold, b.dim, b.italic,
-                      b.underline, b.underline2, b.overstrike, b.reverse);
+                      b.underline, b.underline2, b.overstrike, b.reverse,
+                      b.blink, b.framed, b.encircled, b.fraktur, b.conceal,
+                      b.overlined);
   }
 
   bool operator!=(const Cell &b) const { return !operator==(b); }
@@ -36,11 +44,18 @@ struct Window {
   std::vector<Cell> cells;
   std::size_t xsize, ysize;
   std::size_t cursx = 0, cursy = 0;
+  bool reverse = false;
+  bool cursorvis = true;
   Cell blank{};
+
+private:
+  std::size_t lastcursx, lastcursy;
 
 public:
   Window(std::size_t xs, std::size_t ys)
-      : cells(xs * ys), xsize(xs), ysize(ys) {}
+      : cells(xs * ys), xsize(xs), ysize(ys) {
+    Dirtify();
+  }
 
   void fillbox(std::size_t x, std::size_t y, std::size_t width,
                std::size_t height) {
@@ -84,17 +99,17 @@ public:
   void PutCh(std::size_t x, std::size_t y, char32_t c, int cset = 0) {
     Cell ch = blank;
     ch.ch = c;
-    if (c != U' ') {
-      // fprintf(stderr, "Ch at (%zu, %zu): <%c>\n", x, y, int(c));
-      VLOG(64) << "Ch at (" << x << ", " << y << ")"
-               << ": <" << char(c) << ">";
+    /*if (c != U' ') {
+      fprintf(stderr, "Ch at (%zu, %zu): <%c>\n", x, y, int(c));
     }
+    */
 
     PutCh(x, y, ch);
   }
 
   void Render(std::size_t fx, std::size_t fy, std::uint32_t *pixels);
   void Resize(std::size_t newsx, std::size_t newsy);
+  void Dirtify();
 };
 
 #endif /* SCREEN_H */

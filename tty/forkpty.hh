@@ -16,6 +16,7 @@ public:
   std::pair<std::string, int> Recv();
   void Kill(int signal);
   void Resize(unsigned xsize, unsigned ysize);
+  void Close();
 
 private:
   int fd, pid;
