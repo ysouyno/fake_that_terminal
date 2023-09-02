@@ -51,6 +51,7 @@ void termwindow::Reset() {
   wnd.fillbox(0, 0, wnd.xsize, wnd.ysize); // Clear screen
   state = 0;
   p.clear();
+  lastch = U' ';
 }
 
 void termwindow::save_cur() {
@@ -177,10 +178,12 @@ void termwindow::Write(std::u32string_view s) {
       : case State(c, st_csi_dec) : case State(c, st_csi_dec3)
 
     case AnyState(U'\7'): {
+      lastch = c;
       // BeepOn();
       break;
     }
     case AnyState(U'\b'): {
+      lastch = c;
       ScrollFix();
       if (cx > 0) {
         --cx;
@@ -188,6 +191,7 @@ void termwindow::Write(std::u32string_view s) {
       break;
     }
     case AnyState(U'\t'): {
+      lastch = c;
       ScrollFix();
       cx += 8 - (cx & 7);
     cmov:
@@ -195,6 +199,7 @@ void termwindow::Write(std::u32string_view s) {
       break;
     }
     case AnyState(U'\r'): {
+      lastch = c;
       cx = 0;
       break;
     }
@@ -253,7 +258,7 @@ void termwindow::Write(std::u32string_view s) {
     case State(U'9', st_csi):
       if (p.empty())
         p.emplace_back();
-      p.back() = p.back() * 10 + (c - U'0');
+      p.back() = p.back() * 10u + (c - U'0');
       break;
     case State(U':', st_csi):
     case State(U';', st_csi):
@@ -267,6 +272,7 @@ void termwindow::Write(std::u32string_view s) {
     case State(10, st_default):
     case State(11, st_default):
     case State(12, st_default):
+      lastch = c;
       ScrollFix();
       if (cy != bottom)
         Lf();
@@ -345,8 +351,11 @@ void termwindow::Write(std::u32string_view s) {
     case State(U'K', st_scs1):
       g1set = 3;
       goto ActG1;             // esc ) K
-    case State(U'8', st_scr): /* TODO: clear screen with 'E' */
-      goto Ground;            // esc # 8
+    case State(U'8', st_scr): // clear screen with 'E' // esc # 8
+      wnd.blank.ch = U'E';
+      wnd.fillbox(0, 0, wnd.xsize, wnd.ysize);
+      wnd.blank.ch = U' ';
+      goto Ground;
     case State(U'@', st_esc_percent):
       utfmode = 0;
       goto Ground; // esc % @
@@ -532,7 +541,13 @@ void termwindow::Write(std::u32string_view s) {
       goto Ground;
     case State(U'b', st_csi):
       GetParams(1, true);
-      // TODO: Repeat last printed character n times
+      // Repeat last printed character n times
+      for (unsigned m = std::min(p[0], unsigned(wnd.xsize * wnd.ysize)), c = 0;
+           c < m; ++c) {
+        ScrollFix();
+        wnd.PutCh(cx, cy, lastch, translate);
+        ++cx;
+      }
       break;
     case State(U'm', st_csi): // csi m
       GetParams(1, false);    // Make sure there is at least 1 param
