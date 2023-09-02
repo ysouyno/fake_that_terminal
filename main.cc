@@ -186,6 +186,7 @@ int main() {
         default:
           break;
         }
+        break;
       case SDL_QUIT:
         quit = true;
         break;
