@@ -153,6 +153,10 @@ int main() {
       term.Write(FromUTF8(str));
     }
 
+    if (p[0].revents & (POLLERR | POLLHUP)) {
+      quit = true;
+    }
+
     if (!term.OutBuffer.empty()) {
       std::u32string str(term.OutBuffer.begin(), term.OutBuffer.end());
       outbuffer += ToUTF8(str);
