@@ -289,9 +289,8 @@ void termwindow::Write(std::u32string_view s) {
       goto Ground;
     case State(U'Z', st_esc):
       [[fallthrough]]; // esc Z
-    case State(
-        U'c',
-        st_csi): // csi 0 c // Primary device wnd.blankibutes (host computer)
+    case State(U'c',
+               st_csi): // csi 0 c // Primary device attributes (host computer)
       GetParams(1, false);
       if (!p[0])
         EchoBack(U"\33[?65;1;6;8;15;22c");
@@ -510,17 +509,16 @@ void termwindow::Write(std::u32string_view s) {
       }
       break;
     }
-    case State(
-        U'c',
-        st_csi_dec3): // csi = 0 c, Tertiary device wnd.blankibutes (printer?)
-      GetParams(1, false); // Tertiary device wnd.blankibutes (printer?)
+    case State(U'c',
+               st_csi_dec3): // csi = 0 c, Tertiary device attributes (printer?)
+      GetParams(1, false);   // Tertiary device attributes (printer?)
       // Example response: ^[P!|0^[ (backslash)
       if (!p[0])
         EchoBack(U"\33P!|00000000\x9C");
       break;
     case State(
         U'c',
-        st_csi_dec2): // csi > 0 c, Secondary device wnd.blankibutes (terminal)
+        st_csi_dec2): // csi > 0 c, Secondary device attributes (terminal)
       GetParams(1, false);
       // Example response: ^[[>41;330;0c (middle = firmware version)
       if (!p[0])
