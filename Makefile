@@ -12,8 +12,11 @@ LDLIBS   += -lutil # for forkpty
 
 CPPFLAGS += -MP -MMD -MF$(subst .o,.d,$(addprefix .deps/,$(subst /,_,$@)))
 
+CXXFLAGS += -pg
+
 OBJS = \
 	rendering/screen.o \
+	rendering/person.o \
 	tty/terminal.o \
 	tty/forkpty.o \
 	ctype.o \

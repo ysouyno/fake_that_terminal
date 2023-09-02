@@ -47,9 +47,14 @@ struct Window {
   bool cursorvis = true;
   Cell blank{};
 
+private:
+  std::size_t lastcursx, lastcursy;
+
 public:
   Window(std::size_t xs, std::size_t ys)
-      : cells(xs * ys), xsize(xs), ysize(ys) {}
+      : cells(xs * ys), xsize(xs), ysize(ys) {
+    Dirtify();
+  }
 
   void fillbox(std::size_t x, std::size_t y, std::size_t width,
                std::size_t height) {
@@ -93,15 +98,17 @@ public:
   void PutCh(std::size_t x, std::size_t y, char32_t c, int cset = 0) {
     Cell ch = blank;
     ch.ch = c;
-    if (c != U' ') {
+    /*if (c != U' ') {
       fprintf(stderr, "Ch at (%zu, %zu): <%c>\n", x, y, int(c));
     }
+    */
 
     PutCh(x, y, ch);
   }
 
   void Render(std::size_t fx, std::size_t fy, std::uint32_t *pixels);
   void Resize(std::size_t newsx, std::size_t newsy);
+  void Dirtify();
 };
 
 #endif /* SCREEN_H */
