@@ -14,7 +14,7 @@
 unsigned VidCellWidth = 8, VidCellHeight = 12;
 unsigned WindowWidth = 129, WindowHeight = 40;
 float DefaultWindowScaleX = 3.f;
-float DefaultWindowScaleY = 4.f;
+float DefaultWindowScaleY = 1.f;
 
 namespace {
 SDL_Window *window = nullptr;
@@ -187,6 +187,8 @@ int main() {
         quit = true;
         break;
       case SDL_TEXTINPUT:
+        // fix: type one '.' then terminal show two '.'s
+        pending_input.clear();
         tty.Send(ev.text.text);
         break;
       case SDL_KEYDOWN:
