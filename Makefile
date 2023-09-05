@@ -19,6 +19,7 @@ OBJS = \
 	rendering/person.o \
 	tty/terminal.o \
 	tty/forkpty.o \
+	tty/256color.o \
 	ctype.o \
 	main.o
 

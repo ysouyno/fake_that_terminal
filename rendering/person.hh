@@ -1,7 +1,7 @@
 #ifndef PERSON_H
 #define PERSON_H
 
-unsigned PersonTransform(unsigned bgcolor, unsigned pixcolor, unsigned width,
-                         unsigned x, unsigned y);
+void PersonTransform(unsigned &bgcolor, unsigned &fgcolor, unsigned width,
+                     unsigned x, unsigned y, unsigned action_type);
 
 #endif /* PERSON_H */
