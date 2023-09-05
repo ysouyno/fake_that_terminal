@@ -77,6 +77,9 @@ void termwindow::ScrollFix() {
     cx = 0;
     Lf();
   }
+
+  if (cy >= int(wnd.ysize))
+    cy = wnd.ysize - 1;
 }
 
 void termwindow::FixCoord() {
